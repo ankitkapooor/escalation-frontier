@@ -74,7 +74,7 @@ npm run benchmark -- --run-id banking77-full
 
 The full run makes **3,080 Jev requests and 3,080 reference requests**. Each Jev request asks five typed questions in parallel. Each item is evaluated by both models so every policy can be replayed without additional inference. This is an offline benchmark, not the online cost of the hybrid policy.
 
-Runs are checkpointed under `data/runs/<run-id>/`; repeat the same command to resume completed cases. Dataset, model configuration, and prompt version must match the manifest. These files are ignored by Git. Each output stores the dataset hash/revision, prompts version, returned model IDs, timestamp, raw provider responses, measured round-trip latency, token usage, and correctness inputs. Original prompts are versioned in `jev/client.ts` and `llm/client.ts`.
+Runs are checkpointed under `data/runs/<run-id>/`; repeat the same command to resume completed cases. The runner defaults to four cases in flight (`--concurrency 1` through `16` is supported) and checkpoints each provider separately so paid results survive an interruption. Dataset, model configuration, and prompt version must match the manifest. These files are ignored by Git. Each output stores the dataset hash/revision, prompts version, returned model IDs, timestamp, raw provider responses, measured round-trip latency, token usage, and correctness inputs. Original prompts are versioned in `jev/client.ts` and `llm/client.ts`.
 
 To view a completed run, use **Load measured results** in the interface. To publish it as the default, copy its `benchmark.json` to `public/benchmark.json`, rebuild, and deploy. A partial run is clearly labeled with its sample size. Full PRD empirical acceptance requires a real completed run after you add credentials.
 

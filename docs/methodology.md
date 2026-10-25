@@ -31,7 +31,7 @@ Offline benchmark spend is different from simulated policy spend: both models ev
 
 ## Threshold analysis and constraints
 
-Replays use exact unique confidence values plus an infinitesimal step above each value, as well as 0 and 1. This captures all allocations reachable with a threshold in [0,1], including inclusive gate boundaries. The Pareto boundary removes policies dominated in both total cost and accuracy. Ties can remain equivalent policies. The scenario optimizer chooses the minimum-cost **hybrid** policy meeting accuracy, mean latency, maximum human-review rate, and minimum automation constraints. It reports infeasibility rather than relaxing constraints. Fixed Jev, reference, and human baselines remain visible for comparison.
+Replays use exact unique confidence values, midpoints between neighboring values, and endpoints 0 and 1. Midpoints represent strict-above policies without hiding an epsilon in the displayed threshold. This captures all allocations reachable with a threshold in [0,1], including inclusive gate boundaries. The Pareto boundary removes policies dominated in both total cost and accuracy. Ties can remain equivalent policies. The scenario optimizer chooses the minimum-cost **hybrid** policy meeting accuracy, mean latency, maximum human-review rate, and minimum automation constraints. It reports infeasibility rather than relaxing constraints. Fixed Jev, reference, and human baselines remain visible for comparison.
 
 Selecting a threshold on the test split is exploratory analysis. Confirmatory claims require choosing policy settings on separate validation data and evaluating on untouched held-out data. Small imported runs are not substitutes for the complete test split. The bundled illustration supports no empirical conclusions.
 
@@ -42,11 +42,11 @@ Selecting a threshold on the test split is exploratory analysis. Confirmatory cl
 - Errors / 1,000: `(1 − accuracy) × 1,000`.
 - Latency: sum measured model round trips along each simulated path plus assumed human review time. Includes retries if incurred; excludes offline serialization/queue overhead. p50/p95 use linear interpolation; SLA uses mean latency.
 - Expected calibration error: ten equal-width confidence bins, sample-weighted absolute difference between mean confidence and observed correctness. Empty bins contribute zero.
-- Multiclass Brier: mean sum of squared errors between Jev's full raw-intent probability vector and the one-hot ground truth. Range [0,2]. Always intent-level, even when the main view scores operational families.
+- Multiclass Brier: mean sum of squared errors between Jev's full raw-intent probability vector and the one-hot ground truth. Range [0,2]. Provider-returned probabilities are retained without normalization; validation tolerates up to 0.01 total-mass rounding error plus floating-point epsilon. Always intent-level, even when the main view scores operational families.
 
 ## Provenance and limitations
 
-A run records source revision, CSV SHA-256, prompt version, configured/returned model names, ISO timestamp, raw provider outputs, per-case token usage and measured latency. Runs checkpoint completed pairs of model calls. A failure after the first model but before completing the pair may repeat that first call on resume; completed pairs are reused. Models may remain nondeterministic even at fixed settings. Pinned aliases may be unavailable to some keys; configure an accessible version explicitly.
+A run records source revision, CSV SHA-256, prompt version, configured/returned model names, ISO timestamp, raw provider outputs, per-case token usage and measured latency. Runs checkpoint each provider result atomically, then serialize completed pairs. Both provider results and completed pairs are reused on resume. The default runner processes four cases concurrently; calls within each case remain sequential. Models may remain nondeterministic even at fixed settings. Pinned aliases may be unavailable to some keys; configure an accessible version explicitly.
 
 Costs, human accuracy, security proxies, self-reported reference confidence, and serial latency are assumptions that limit how the experiment generalizes. No real customer data is collected. Interaction events are dispatched locally as `frontier:interaction` browser events; no analytics provider or visitor-tracking endpoint is enabled by default.
 

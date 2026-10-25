@@ -1,4 +1,10 @@
-import { readFile, mkdir, writeFile, appendFile } from "node:fs/promises";
+import {
+  readFile,
+  mkdir,
+  writeFile,
+  appendFile,
+  rename,
+} from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { classifyJev, PROMPT_VERSION } from "../jev/client.ts";
@@ -41,6 +47,42 @@ export function parseCsv(text: string): string[][] {
   }
   return rows;
 }
+export async function runConcurrent<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<void>,
+) {
+  let next = 0;
+  let failure: unknown;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (!failure) {
+        const index = next++;
+        if (index >= items.length) return;
+        try {
+          await worker(items[index], index);
+        } catch (error) {
+          failure ??= error;
+        }
+      }
+    }),
+  );
+  if (failure) throw failure;
+}
+export async function checkpoint<T>(
+  file: string,
+  create: () => Promise<T>,
+): Promise<T> {
+  try {
+    return JSON.parse(await readFile(file, "utf8")) as T;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const value = await create();
+  await writeFile(file + ".tmp", JSON.stringify(value));
+  await rename(file + ".tmp", file);
+  return value;
+}
 async function main() {
   const csv = await readFile(
     new URL("../data/banking77-test.csv", import.meta.url),
@@ -54,6 +96,9 @@ async function main() {
   if (!Number.isInteger(limit) || limit < 1 || limit > 3080)
     throw new Error("--limit must be between 1 and 3080.");
   const entries = rows.slice(0, limit);
+  const concurrency = Number(option("--concurrency", "4"));
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 16)
+    throw new Error("--concurrency must be between 1 and 16.");
   if (args.includes("--dry-run")) {
     console.log(
       JSON.stringify(
@@ -133,16 +178,23 @@ async function main() {
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
   }
-  for (const [i, row] of entries.entries()) {
+  let completed = 0;
+  let appendQueue = Promise.resolve();
+  await runConcurrent(entries, concurrency, async (row, i) => {
     const id = `banking77-test-${String(i).padStart(4, "0")}`;
     if (cached.has(id)) {
       run.cases.push(cached.get(id)!);
-      continue;
+      completed++;
+      return;
     }
     const text = row[ti],
       truth = row[li];
-    const j = await classifyJev(text, process.env.JEV_API_KEY!);
-    const llm = await classifyReference(text, process.env.REFERENCE_API_KEY!);
+    const j = await checkpoint(`${path}/${id}.jev.json`, () =>
+      classifyJev(text, process.env.JEV_API_KEY!),
+    );
+    const llm = await checkpoint(`${path}/${id}.reference.json`, () =>
+      classifyReference(text, process.env.REFERENCE_API_KEY!),
+    );
     const c: Case = {
       id,
       text,
@@ -155,10 +207,14 @@ async function main() {
     // Never include credentials in recorded requests or outputs.
     delete (c as Case & { prediction?: unknown }).prediction;
     validateRun({ ...run, cases: [c] });
-    await appendFile(`${path}/cases.jsonl`, JSON.stringify(c) + "\n");
+    appendQueue = appendQueue.then(() =>
+      appendFile(`${path}/cases.jsonl`, JSON.stringify(c) + "\n"),
+    );
+    await appendQueue;
     run.cases.push(c);
-    console.log(`${i + 1}/${entries.length} ${id}`);
-  }
+    console.log(`${++completed}/${entries.length} ${id}`);
+  });
+  run.cases.sort((a, b) => a.id.localeCompare(b.id));
   run.models = { jev: run.cases[0].jev.model, llm: run.cases[0].llm.model };
   validateRun(run);
   await writeFile(`${path}/benchmark.json`, JSON.stringify(run));

@@ -1450,7 +1450,7 @@ function App() {
               </div>
               <div className="threshold-heading">
                 <label htmlFor="threshold">Confidence threshold</label>
-                <output htmlFor="threshold">{threshold.toFixed(2)}</output>
+                <output htmlFor="threshold">{threshold.toFixed(3)}</output>
               </div>
               <p className="small text-muted">
                 Jev acts above this line. Uncertain cases buy more intelligence.
@@ -1761,15 +1761,12 @@ function App() {
                     className="button light"
                     onClick={() => {
                       setThreshold(Math.min(1, best.threshold));
-                      document
-                        .getElementById("frontier")
-                        ?.scrollIntoView({
-                          behavior: matchMedia(
-                            "(prefers-reduced-motion: reduce)",
-                          ).matches
-                            ? "auto"
-                            : "smooth",
-                        });
+                      document.getElementById("frontier")?.scrollIntoView({
+                        behavior: matchMedia("(prefers-reduced-motion: reduce)")
+                          .matches
+                          ? "auto"
+                          : "smooth",
+                      });
                       track("apply_optimum");
                     }}
                   >

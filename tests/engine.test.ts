@@ -210,3 +210,83 @@ test("bundled data matches pinned official split; demo is explicitly a simulatio
     }),
   );
 });
+
+test("incremental frontier matches full replay including exact p50/p95 at every threshold", async () => {
+  const run = validateRun(
+    JSON.parse(
+      await readFile(new URL("../public/demo.json", import.meta.url), "utf8"),
+    ),
+  );
+  for (const advanced of [false, true])
+    for (const human of [false, true]) {
+      const assumptions = {
+        ...a,
+        humanLatencyMs: 12345.5,
+        escalationCost: 0.17,
+        overhead: 0.003,
+      };
+      const cases = run.cases.slice(0, 80);
+      for (const fast of frontier(cases, assumptions, human, advanced)) {
+        const replay = evaluate(
+          cases,
+          fast.threshold,
+          assumptions,
+          human,
+          "hybrid",
+          advanced,
+        );
+        for (const key of Object.keys(fast) as (keyof typeof fast)[])
+          assert.ok(
+            Math.abs(fast[key] - replay[key]) < 1e-7,
+            `${key} differs at ${fast.threshold}`,
+          );
+      }
+    }
+});
+test("efficient sweep preserves tied policies and removes equal-cost lower-accuracy points", () => {
+  const base = evaluate([c], 0, a, false);
+  const points = [
+    { ...base, totalCost: 10, accuracy: 0.9 },
+    { ...base, totalCost: 10, accuracy: 0.8 },
+    { ...base, totalCost: 10, accuracy: 0.9 },
+    { ...base, totalCost: 12, accuracy: 0.9 },
+    { ...base, totalCost: 20, accuracy: 0.95 },
+  ];
+  assert.equal(pareto(points).length, 3);
+  assert.equal(pareto(points).filter((p) => p.totalCost === 10).length, 2);
+});
+
+test("run validation accepts the documented 0.01 rounding tolerance inclusively", async () => {
+  const demo = JSON.parse(
+    await readFile(new URL("../public/demo.json", import.meta.url), "utf8"),
+  );
+  const original = demo.cases[0];
+  const probabilities = Object.fromEntries(labels.map((label) => [label, 0]));
+  probabilities.exchange_via_app = 0.47000000000000003;
+  probabilities.exchange_rate = 0.27;
+  probabilities.fiat_currency_support = 0.23;
+  probabilities.supported_cards_and_currencies = 0.02;
+  const row = {
+    ...original,
+    truth: "exchange_via_app",
+    jev: { ...original.jev, label: "exchange_via_app", probabilities },
+  };
+  assert.doesNotThrow(() => validateRun({ ...demo, cases: [row] }));
+  assert.throws(() =>
+    validateRun({
+      ...demo,
+      cases: [
+        {
+          ...row,
+          jev: {
+            ...row.jev,
+            probabilities: {
+              ...probabilities,
+              supported_cards_and_currencies: 0,
+            },
+          },
+        },
+      ],
+    }),
+  );
+});

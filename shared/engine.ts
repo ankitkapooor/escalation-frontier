@@ -8,9 +8,13 @@ import type {
   Run,
 } from "./types.ts";
 export const families = taxonomy as Record<string, string[]>;
+const familyByIntent = new Map(
+  Object.entries(families).flatMap(([family, labels]) =>
+    labels.map((label) => [label, family] as const),
+  ),
+);
 export const familyOf = (label: string): string =>
-  Object.entries(families).find(([, labels]) => labels.includes(label))?.[0] ??
-  label;
+  familyByIntent.get(label) ?? label;
 export const confidenceOf = (c: Case, advanced = false) =>
   advanced ? c.jev.confidence : (c.jev.familyConfidence ?? c.jev.confidence);
 export const pretty = (s: string) =>
@@ -141,33 +145,150 @@ export function frontier(
   human: boolean,
   advanced = false,
 ): Metrics[] {
-  // Exact breakpoints preserve every possible allocation; no inference is repeated.
-  const thresholds = [
-    ...new Set([
-      0,
-      1,
-      ...cases.flatMap((c) => [
-        confidenceOf(c, advanced),
-        Math.min(1, confidenceOf(c, advanced) + 0.000001),
-      ]),
-    ]),
+  const boundaries = [
+    ...new Set([0, 1, ...cases.map((c) => confidenceOf(c, advanced))]),
   ].sort((x, y) => x - y);
-  return thresholds.map((t) =>
-    evaluate(cases, t, a, human, "hybrid", advanced),
+  // Midpoints represent strict-above policies without an invisible epsilon in
+  // the displayed threshold. Inclusive boundaries remain available as well.
+  const thresholds = boundaries.flatMap((boundary, index) =>
+    index + 1 < boundaries.length
+      ? [boundary, (boundary + boundaries[index + 1]) / 2]
+      : [boundary],
   );
+  // A case changes handler at most once as the gate increases. Sweep those
+  // transitions instead of replaying every case at every confidence breakpoint.
+  const rows = cases.map((c) => ({
+    confidence: confidenceOf(c, advanced),
+    initial: outcome(c, 0, a, human, "hybrid", advanced),
+    escalated: outcome(c, Infinity, a, human, "hybrid", advanced),
+  }));
+  const transitions = rows
+    .filter((r) => r.initial.handler === "jev")
+    .sort((x, y) => x.confidence - y.confidence);
+  const latencies = [
+    ...new Set(
+      rows.flatMap((r) => [r.initial.latencyMs, r.escalated.latencyMs]),
+    ),
+  ].sort((x, y) => x - y);
+  const positions = new Map(
+    latencies.map((value, index) => [value, index + 1]),
+  );
+  // A frequency tree supports exact interpolated latency quantiles in log(n).
+  const tree = new Float64Array(latencies.length + 1);
+  const totals = {
+    correct: 0,
+    jev: 0,
+    llm: 0,
+    human: 0,
+    inference: 0,
+    review: 0,
+    error: 0,
+    escalation: 0,
+    latencyMs: 0,
+  };
+  function update(result: Outcome, direction: number) {
+    totals.correct += Number(result.correct) * direction;
+    totals[result.handler] += direction;
+    for (const key of [
+      "inference",
+      "review",
+      "error",
+      "escalation",
+      "latencyMs",
+    ] as const)
+      totals[key] += result[key] * direction;
+    for (
+      let index = positions.get(result.latencyMs)!;
+      index < tree.length;
+      index += index & -index
+    )
+      tree[index] += direction;
+  }
+  function atRank(rank: number) {
+    let index = 0,
+      remaining = rank + 1;
+    for (
+      let step = 2 ** Math.floor(Math.log2(latencies.length));
+      step >= 1;
+      step = Math.floor(step / 2)
+    ) {
+      const next = index + step;
+      if (next < tree.length && tree[next] < remaining) {
+        index = next;
+        remaining -= tree[next];
+      }
+    }
+    return latencies[index];
+  }
+  function percentile(p: number) {
+    if (!cases.length) return 0;
+    const rank = (cases.length - 1) * p;
+    const low = atRank(Math.floor(rank)),
+      high = atRank(Math.ceil(rank));
+    return low + (high - low) * (rank % 1);
+  }
+  rows.forEach((r) => update(r.initial, 1));
+  let next = 0;
+  const n = cases.length || 1;
+  return thresholds.map((threshold) => {
+    while (
+      next < transitions.length &&
+      transitions[next].confidence < threshold
+    ) {
+      const row = transitions[next++];
+      update(row.initial, -1);
+      update(row.escalated, 1);
+    }
+    const inferenceCost = (totals.inference / n) * 1000,
+      reviewCost = (totals.review / n) * 1000,
+      errorCost = (totals.error / n) * 1000,
+      escalationCost = (totals.escalation / n) * 1000;
+    return {
+      threshold,
+      count: cases.length,
+      accuracy: totals.correct / n,
+      jevRate: totals.jev / n,
+      llmRate: totals.llm / n,
+      humanRate: totals.human / n,
+      inferenceCost,
+      reviewCost,
+      errorCost,
+      escalationCost,
+      totalCost:
+        inferenceCost +
+        reviewCost +
+        errorCost +
+        escalationCost +
+        a.overhead * 1000,
+      errors: ((cases.length - totals.correct) / n) * 1000,
+      p50: percentile(0.5),
+      p95: percentile(0.95),
+      meanLatency: totals.latencyMs / n,
+    };
+  });
 }
 export function pareto(points: Metrics[]) {
-  return points
-    .filter(
-      (p) =>
-        !points.some(
-          (q) =>
-            q.totalCost <= p.totalCost &&
-            q.accuracy >= p.accuracy &&
-            (q.totalCost < p.totalCost || q.accuracy > p.accuracy),
-        ),
+  const sorted = [...points].sort(
+    (a, b) => a.totalCost - b.totalCost || b.accuracy - a.accuracy,
+  );
+  const efficient: Metrics[] = [];
+  let bestAccuracy = -Infinity;
+  for (let index = 0; index < sorted.length;) {
+    let end = index + 1;
+    while (
+      end < sorted.length &&
+      sorted[end].totalCost === sorted[index].totalCost
     )
-    .sort((a, b) => a.totalCost - b.totalCost);
+      end++;
+    const groupAccuracy = sorted[index].accuracy;
+    if (groupAccuracy > bestAccuracy) {
+      for (let i = index; i < end && sorted[i].accuracy === groupAccuracy; i++)
+        efficient.push(sorted[i]);
+    }
+    bestAccuracy = Math.max(bestAccuracy, groupAccuracy);
+    index = end;
+  }
+  return efficient;
 }
 export function optimal(
   points: Metrics[],
@@ -283,7 +404,7 @@ export function validateRun(value: unknown): Run {
         entries.some(
           ([k, v]) => !known.has(k) || !Number.isFinite(v) || v < 0 || v > 1,
         ) ||
-        Math.abs(entries.reduce((s, [, v]) => s + v, 0) - 1) > 0.01 ||
+        Math.abs(entries.reduce((s, [, v]) => s + v, 0) - 1) > 0.01 + 1e-9 ||
         !Object.hasOwn(p.probabilities, c.truth)
       )
         throw new Error(`Invalid probability distribution in ${c.id}.`);
