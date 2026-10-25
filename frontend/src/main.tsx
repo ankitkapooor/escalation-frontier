@@ -44,6 +44,7 @@ import type {
   Prediction,
 } from "../../shared/types.ts";
 import "./styles.css";
+import "./dossier.css";
 const REPO = "https://github.com/ankitkapooor/escalation-frontier";
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", {
@@ -61,6 +62,110 @@ const time = (n: number) =>
 function track(event: string) {
   window.dispatchEvent(
     new CustomEvent("frontier:interaction", { detail: { event } }),
+  );
+}
+const reducedMotion = () =>
+  matchMedia("(prefers-reduced-motion: reduce)").matches;
+const INK = {
+  jev: "#2f4a6e",
+  llm: "#a2582b",
+  human: "#5a5046",
+  red: "#a8291f",
+  pencil: "#8a7a62",
+  grid: "#cdbf9f",
+  paper: "#f3ead6",
+};
+const typeMs = (text: string) => Math.min(24, 2400 / Math.max(1, text.length));
+function useReveal(ready: boolean) {
+  useEffect(() => {
+    if (!ready || !("IntersectionObserver" in window) || reducedMotion())
+      return;
+    const root = document.documentElement;
+    const els = document.querySelectorAll<HTMLElement>("[data-reveal]");
+    els.forEach((el) => {
+      if (el.getBoundingClientRect().top < innerHeight)
+        el.classList.add("revealed");
+    });
+    root.classList.add("reveal-on");
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries)
+          if (e.isIntersecting) {
+            e.target.classList.add("revealed");
+            io.unobserve(e.target);
+          }
+      },
+      { threshold: 0.01 },
+    );
+    els.forEach((el) => io.observe(el));
+    return () => {
+      io.disconnect();
+      root.classList.remove("reveal-on");
+    };
+  }, [ready]);
+}
+function Typewriter({ text }: { text: string }) {
+  const [shown, setShown] = useState(() => (reducedMotion() ? text.length : 0));
+  useEffect(() => {
+    if (reducedMotion()) return setShown(text.length);
+    setShown(0);
+    let i = 0;
+    const t = setInterval(() => {
+      i += 1;
+      setShown(i);
+      if (i >= text.length) clearInterval(t);
+    }, typeMs(text));
+    return () => clearInterval(t);
+  }, [text]);
+  const done = shown >= text.length;
+  return (
+    <p className="typed">
+      <span className="typed-ghost" aria-hidden="true">
+        “{text}”
+      </span>
+      <span className="typed-live" aria-hidden="true">
+        “{text.slice(0, shown)}
+        {done && "”"}
+        <i className={done ? "caret done" : "caret"} />
+      </span>
+      <span className="sr-only">“{text}”</span>
+    </p>
+  );
+}
+function PaperClip({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      className={`paperclip ${className}`}
+      viewBox="0 0 23 72"
+      aria-hidden="true"
+    >
+      <path
+        d="M7 24V52a4.5 4.5 0 0 0 9 0V11a6.5 6.5 0 0 0-13 0v46a8.5 8.5 0 0 0 17 0V22"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.1"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+function Dust() {
+  return (
+    <div className="dust" aria-hidden="true">
+      {Array.from({ length: 18 }, (_, i) => (
+        <i
+          key={i}
+          style={
+            {
+              "--x": `${(i * 53 + 7) % 100}%`,
+              "--dur": `${16 + ((i * 7) % 13)}s`,
+              "--delay": `${-((i * 3.1) % 17)}s`,
+              "--size": `${1.5 + (i % 3)}px`,
+            } as React.CSSProperties
+          }
+        />
+      ))}
+    </div>
   );
 }
 function download(data: unknown, name: string) {
@@ -159,7 +264,7 @@ function Modal({
       }}
     >
       <div
-        className="modal"
+        className="modal case-sheet"
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -206,8 +311,35 @@ function RoutingDemo({ run, threshold }: { run: Run; threshold: number }) {
     esc =
       confidenceOf(c) <
       (c.securityProbability >= 0.85 ? Math.max(threshold, 0.97) : threshold);
+  const typedAt = useRef({ id: "", at: 0 });
+  if (typedAt.current.id !== c.id)
+    typedAt.current = { id: c.id, at: Date.now() };
+  const stampDelay = reducedMotion()
+    ? 0
+    : Math.max(
+        0,
+        typedAt.current.at +
+          (c.text.length + 2) * typeMs(c.text) +
+          150 -
+          Date.now(),
+      );
   return (
     <div className="routing-demo">
+      <PaperClip />
+      <span className="coffee-ring" aria-hidden="true" />
+      <span className="filed-stamp" aria-hidden="true">
+        FILED
+        <small>
+          {run.timestamp
+            ? new Date(run.timestamp)
+                .toLocaleDateString("en-US", {
+                  month: "short",
+                  year: "numeric",
+                })
+                .toUpperCase()
+            : "SPECIMEN"}
+        </small>
+      </span>
       <div className="demo-top mono">
         <span>
           <span className="status-dot" /> ROUTING OBSERVATORY
@@ -219,7 +351,7 @@ function RoutingDemo({ run, threshold }: { run: Run; threshold: number }) {
       </div>
       <div className="message" key={c.id}>
         <div className="micro">INCOMING CUSTOMER MESSAGE</div>
-        <p>“{c.text}”</p>
+        <Typewriter text={c.text} />
         <span className="micro text-muted">
           BANKING77 / {c.id.replace("banking77-test-", "#")}
         </span>
@@ -247,8 +379,11 @@ function RoutingDemo({ run, threshold }: { run: Run; threshold: number }) {
         />
       </div>
       <div className="routing-verdict">
-        <span className={esc ? "text-amber" : "text-green"}>
-          <span className="status-dot" />
+        <span
+          key={`${c.id}-${esc}`}
+          className={`stamp verdict-stamp ${esc ? "rust" : "blue"}`}
+          style={{ animationDelay: `${stampDelay}ms` }}
+        >
           {esc ? "BUY MORE INTELLIGENCE" : "JEV HANDLES THIS"}
         </span>
         <button
@@ -341,24 +476,39 @@ function FrontierChart({
       >
         <defs>
           <pattern
-            id="chartDots"
-            width="20"
-            height="20"
+            id="graphPaper"
+            width="16"
+            height="16"
             patternUnits="userSpaceOnUse"
           >
-            <circle cx="2" cy="2" r=".6" fill="#dce1d8" />
+            <path
+              d="M16 0H0V16"
+              fill="none"
+              stroke="#b9bfae"
+              strokeWidth=".5"
+            />
           </pattern>
+          <filter id="pencil" x="-2%" y="-10%" width="104%" height="120%">
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency="0.035"
+              numOctaves="2"
+              seed="4"
+            />
+            <feDisplacementMap in="SourceGraphic" scale="2.4" />
+          </filter>
         </defs>
         <rect
           x={L}
           y={T}
           width={W - L - R}
           height={H - T - B}
-          fill="url(#chartDots)"
+          fill="url(#graphPaper)"
+          opacity=".7"
         />
         {ys.map((n) => (
           <g key={n}>
-            <line x1={L} x2={W - R} y1={y(n)} y2={y(n)} stroke="#e0e4db" />
+            <line x1={L} x2={W - R} y1={y(n)} y2={y(n)} stroke={INK.grid} />
             <text
               x={L - 12}
               y={y(n) + 4}
@@ -380,7 +530,7 @@ function FrontierChart({
               }
               y1={T}
               y2={H - B}
-              stroke="#e0e4db"
+              stroke={INK.grid}
               strokeDasharray="2 5"
             />
             <text
@@ -402,7 +552,8 @@ function FrontierChart({
               x2={W - R}
               y1={y(accuracyFloor)}
               y2={y(accuracyFloor)}
-              stroke="#9a9d8b"
+              stroke={INK.red}
+              strokeOpacity=".55"
               strokeDasharray="5 5"
             />
             <text
@@ -416,11 +567,16 @@ function FrontierChart({
           </>
         )}
         <path
+          key={costMode}
+          className="frontier-line"
+          pathLength={1}
           d={path}
-          stroke="#286a50"
+          stroke={INK.jev}
           strokeWidth="2.5"
           strokeLinejoin="round"
+          strokeLinecap="round"
           fill="none"
+          filter="url(#pencil)"
         />
         {points
           .filter((_, i) => i % 2 === 0)
@@ -430,8 +586,8 @@ function FrontierChart({
               cx={x(p)}
               cy={y(p.accuracy)}
               r="3"
-              fill="#8fac97"
-              opacity=".5"
+              fill={INK.pencil}
+              opacity=".45"
               onMouseEnter={() => setHover(p)}
               onMouseLeave={() => setHover(null)}
               onClick={() => onSelect(Math.min(1, p.threshold))}
@@ -450,7 +606,7 @@ function FrontierChart({
               width="10"
               height="10"
               rx={i === 2 ? 0 : 2}
-              fill={["#537c65", "#ba8c44", "#555e59"][i]}
+              fill={[INK.jev, INK.llm, INK.human][i]}
             />
             <text
               x={x(p) + (i === 2 ? -10 : 10)}
@@ -467,23 +623,27 @@ function FrontierChart({
           x2={x(selected)}
           y1={y(selected.accuracy)}
           y2={H - B}
-          stroke="#286a50"
+          stroke={INK.red}
           strokeDasharray="3 5"
         />
-        <circle
+        <ellipse
+          className="pen-circle"
           cx={x(selected)}
           cy={y(selected.accuracy)}
-          r="13"
-          fill="#286a50"
-          opacity=".12"
+          rx="15"
+          ry="12"
+          fill="none"
+          stroke={INK.red}
+          strokeWidth="1.6"
+          transform={`rotate(-12 ${x(selected)} ${y(selected.accuracy)})`}
         />
         <circle
           cx={x(selected)}
           cy={y(selected.accuracy)}
-          r="6"
-          stroke="#fff"
-          strokeWidth="2.5"
-          fill="#286a50"
+          r="5.5"
+          stroke={INK.paper}
+          strokeWidth="2"
+          fill={INK.red}
         />
         <text x={L} y="12" className="svg-axis">
           DECISION ACCURACY ↑
@@ -571,9 +731,9 @@ function CaseInspector({
   return (
     <Modal title={`CASE FILE / ${c.id}`} onClose={onClose}>
       <div className="case-detail">
-        <Tag tone={result.correct ? "green" : "red"}>
+        <span className={`stamp case-stamp ${result.correct ? "blue" : "red"}`}>
           {result.correct ? "CORRECT ROUTE" : "INCORRECT ROUTE"}
-        </Tag>
+        </span>
         <h2>“{c.text}”</h2>
         <dl className="detail-grid">
           <div>
@@ -745,18 +905,19 @@ function FailureAtlas({
           </button>
         ))}
       </div>
-      <div className="atlas-table">
+      <div className="atlas-table" data-reveal>
         <div className="table-header">
           <span>CUSTOMER MESSAGE</span>
           <span>JEV CONFIDENCE</span>
           <span>OUTCOME</span>
           <span />
         </div>
-        {filtered.slice(page * 6, page * 6 + 6).map((c) => {
+        {filtered.slice(page * 6, page * 6 + 6).map((c, i) => {
           const r = outcome(c, threshold, a, human, "hybrid", advanced);
           return (
             <button
               className="case-row"
+              style={{ "--i": i } as React.CSSProperties}
               key={c.id}
               onClick={() => {
                 setSelected(c);
@@ -851,7 +1012,9 @@ function FailureAtlas({
 function CalibrationView({ run, advanced }: { run: Run; advanced: boolean }) {
   const cal = calibration(run.cases, advanced);
   return (
-    <div className="calibration-panel">
+    <div className="calibration-panel" data-reveal>
+      <span className="tape tape-left" aria-hidden="true" />
+      <span className="tape tape-right" aria-hidden="true" />
       <div className="calibration-intro">
         <SectionLabel n="04">CALIBRATION CHECK</SectionLabel>
         <h2>
@@ -896,6 +1059,25 @@ function CalibrationView({ run, advanced }: { run: Run; advanced: boolean }) {
           role="img"
           aria-label="Calibration bars compare mean confidence to observed accuracy in ten confidence buckets"
         >
+          <defs>
+            <pattern
+              id="hatch"
+              width="4"
+              height="4"
+              patternUnits="userSpaceOnUse"
+              patternTransform="rotate(45)"
+            >
+              <rect width="4" height="4" fill="#ead9b8" />
+              <line
+                x1="0"
+                y1="0"
+                x2="0"
+                y2="4"
+                stroke={INK.llm}
+                strokeWidth="1.4"
+              />
+            </pattern>
+          </defs>
           {[0, 0.25, 0.5, 0.75, 1].map((n) => (
             <g key={n}>
               <line
@@ -903,7 +1085,7 @@ function CalibrationView({ run, advanced }: { run: Run; advanced: boolean }) {
                 x2="530"
                 y1={225 - n * 180}
                 y2={225 - n * 180}
-                stroke="#d9dfd5"
+                stroke={INK.grid}
               />
               <text
                 x="31"
@@ -918,18 +1100,24 @@ function CalibrationView({ run, advanced }: { run: Run; advanced: boolean }) {
           {cal.bins.map((b, i) => (
             <g key={i}>
               <rect
+                className="cal-bar"
+                style={{ animationDelay: `${i * 60}ms` }}
                 x={47 + i * 48}
                 y={225 - b.accuracy * 180}
                 width="17"
                 height={b.accuracy * 180}
-                fill="#347056"
+                fill={INK.jev}
               />
               <rect
+                className="cal-bar"
+                style={{ animationDelay: `${i * 60 + 30}ms` }}
                 x={66 + i * 48}
                 y={225 - b.confidence * 180}
                 width="10"
                 height={b.confidence * 180}
-                fill="#b3c3ad"
+                fill="url(#hatch)"
+                stroke={INK.llm}
+                strokeWidth=".6"
               />
               <text
                 x={61 + i * 48}
@@ -1163,6 +1351,7 @@ function App() {
     [cases, a, advanced],
   );
   const best = useMemo(() => optimal(points, a), [points, a]);
+  useReveal(!!run);
   const change = (key: keyof Assumptions, value: number) => {
     setA((s) => ({ ...s, [key]: value }));
     track("scenario_change");
@@ -1207,7 +1396,7 @@ function App() {
             </button>
           </>
         ) : (
-          <p>Preparing the experiment…</p>
+          <p className="retrieving">Retrieving the file from the archive…</p>
         )}
       </div>
     );
@@ -1216,6 +1405,7 @@ function App() {
     savings = 1 - selected.totalCost / (baselines[1].totalCost || 1);
   return (
     <>
+      <Dust />
       <a className="skip-link" href="#frontier">
         Skip to experiment
       </a>
@@ -1275,7 +1465,20 @@ function App() {
               <br />
               intelligence should
               <br />
-              <em>software buy?</em>
+              <em className="scribbled">
+                software buy?
+                <svg
+                  className="scribble"
+                  viewBox="0 0 300 26"
+                  preserveAspectRatio="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    pathLength={1}
+                    d="M5 14C62 6 122 21 182 11S268 7 296 12M24 21C96 15 170 23 280 18"
+                  />
+                </svg>
+              </em>
             </h1>
             <p className="hero-subtitle">
               Not every decision deserves the same model.
@@ -1308,7 +1511,7 @@ function App() {
           </div>
           <RoutingDemo run={run} threshold={threshold} />
         </section>
-        <div className="thesis-strip">
+        <div className="thesis-strip" data-reveal>
           <div>
             <span className="micro">THE HYPOTHESIS</span>
             <p>
@@ -1378,7 +1581,7 @@ function App() {
               onChange={importFile}
             />
           </div>
-          <div className="workbench">
+          <div className="workbench" data-reveal>
             <div className="chart-panel">
               <div className="panel-top">
                 <span className="micro">ACCURACY × COST</span>
@@ -1619,7 +1822,7 @@ function App() {
               <RotateCcw size={14} /> Reset assumptions
             </button>
           </div>
-          <div className="scenario-grid">
+          <div className="scenario-grid" data-reveal>
             <div className="assumptions">
               <div className="assumption-column">
                 <h3 className="micro">COST OF INTELLIGENCE / DECISION</h3>
@@ -1732,6 +1935,7 @@ function App() {
               </details>
             </div>
             <div className="recommendation">
+              <span className="tape" aria-hidden="true" />
               <div className="recommendation-top">
                 <span className="micro">
                   {isDemo
@@ -1847,7 +2051,7 @@ function App() {
               Inspect the repository <ArrowUpRight size={15} />
             </a>
           </div>
-          <div className="methodology-details">
+          <div className="methodology-details" data-reveal>
             <details open>
               <summary>
                 <span>01 / What’s behind the numbers?</span>
@@ -1995,7 +2199,7 @@ function App() {
             </div>
           </div>
         </section>
-        <div className="closing-line">
+        <div className="closing-line" data-reveal>
           <span className="micro">
             AN EXPERIMENT IN INTELLIGENCE ALLOCATION
           </span>
@@ -2013,7 +2217,7 @@ function App() {
         <a href="https://ankitkapoor.me" className="footer-name">
           A project by Ankit Kapoor <ArrowUpRight size={13} />
         </a>
-        <span>BUILT TO QUESTION THE DEFAULT.</span>
+        <span>— END OF FILE · BUILT TO QUESTION THE DEFAULT —</span>
         <a href={REPO} target="_blank" rel="noreferrer">
           <Github size={15} /> Source code
         </a>
