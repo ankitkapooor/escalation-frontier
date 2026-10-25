@@ -4,7 +4,7 @@
 
 An interactive portfolio experiment by [Ankit Kapoor](https://ankitkapoor.me). Explore how a confidence gate allocates banking support decisions between Jev, a reasoning model, and simulated human review.
 
-Live at **[escalation.ankitkapoor.me](https://escalation.ankitkapoor.me)**. One Node service serves the React interface and the optional live Jev endpoint, with a tiny Cloudflare Worker forwarding the portfolio hostname over HTTPS. No database, background worker, or paid API is needed to explore the illustration.
+Live at **[escalation.ankitkapoor.me](https://escalation.ankitkapoor.me)**. One Node service serves the React interface and the optional live Jev endpoint, with a tiny Cloudflare Worker forwarding the portfolio hostname over HTTPS. No database, background worker, or new model API calls are needed to explore the saved results.
 
 ## Run locally
 
@@ -46,9 +46,11 @@ On Railway, enter these under the service's **Variables** tab. `.env` is ignored
 
 ## Evidence status
 
-**No empirical model benchmark is bundled.** The default illustration contains 154 real BANKING77 test messages with deterministic simulated predictions, confidence scores, and latencies. It is labeled throughout the UI. It is not evidence of Jev or reference-model performance. There is no fabricated run date.
+**The published app replays 1,270 completed, measured cases**, using Jev `jev-1.13.0` and Anthropic `claude-sonnet-4-5-20250929`. Raw outputs, token usage, measured latency, model IDs, and provenance are included in [`public/benchmark.json`](public/benchmark.json). See the [recorded results report](docs/benchmark-report.md).
 
-The complete official **3,080-query test split** is bundled for the real benchmark. All dollar amounts in the workbench are editable scenario assumptions, not invoiced costs or provider price quotes. Simulated human review assumes perfect ground-truth correctness and an explicit cost and delay.
+This is a **partial test run covering 32 of 77 intents**, collected in BANKING77's original, intent-grouped order. It is not representative of the complete dataset and is not a full BANKING77 benchmark. The run was stopped at the owner's request; the saved results require no further paid inference. The interface labels this as a measured subset.
+
+The original 154-case illustration remains in `public/demo.json` as a fallback and test fixture. Its outputs are simulated and are not used for the published measured results. All dollar figures are editable scenario assumptions, not invoiced provider spend. Human review remains simulated.
 
 ## Run a real benchmark
 
@@ -65,21 +67,21 @@ Check configuration without making any API requests:
 npm run benchmark:dry
 ```
 
-Start with a small paid smoke run, then evaluate the full official split:
+New paid runs default to **25 cases**. Nothing runs automatically. Larger runs over 100 cases require an explicit `--allow-large-run` flag; use a bounded case count suitable for a portfolio project.
 
 ```sh
-npm run benchmark -- --limit 10 --run-id smoke
-npm run benchmark -- --run-id banking77-full
+npm run benchmark -- --limit 25 --run-id small-run
 ```
 
-The full run makes **3,080 Jev requests and 3,080 reference requests**. Each Jev request asks five typed questions in parallel. Each item is evaluated by both models so every policy can be replayed without additional inference. This is an offline benchmark, not the online cost of the hybrid policy.
+Each case makes one Jev request (five typed questions) and one reference-model request. Exploring the published workbench, generating reports, and running unit tests make no model API calls.
 
 Runs are checkpointed under `data/runs/<run-id>/`; repeat the same command to resume completed cases. The runner defaults to four cases in flight (`--concurrency 1` through `16` is supported) and checkpoints each provider separately so paid results survive an interruption. Dataset, model configuration, and prompt version must match the manifest. These files are ignored by Git. Each output stores the dataset hash/revision, prompts version, returned model IDs, timestamp, raw provider responses, measured round-trip latency, token usage, and correctness inputs. Original prompts are versioned in `jev/client.ts` and `llm/client.ts`.
 
-To view a completed run, use **Load measured results** in the interface. To publish it as the default, copy its `benchmark.json` to `public/benchmark.json`, rebuild, and deploy. A partial run is clearly labeled with its sample size. Full PRD empirical acceptance requires a real completed run after you add credentials.
+To view a completed run, use **Load measured results** in the interface. To publish it as the default, copy its `benchmark.json` to `public/benchmark.json`, rebuild, and deploy. A partial run is clearly labeled with its sample size. The portfolio ships with the completed partial results; it does not claim the PRD’s full 3,000-case empirical acceptance criterion.
 
 ## Methodology and data
 
+- [Recorded benchmark results](docs/benchmark-report.md)
 - [Methodology and assumptions](docs/methodology.md)
 - [Deployment and domain setup](docs/deployment.md)
 - [Benchmark schema](docs/benchmark-schema.md)
@@ -96,7 +98,7 @@ npm run benchmark:dry
 npm run build
 ```
 
-Tests cover typed provider adapters, threshold boundaries, security gates, operational versus intent scoring, sequential costs/latency, error-cost sensitivity, infeasible constraints, Pareto dominance, calibration, CSV parsing, and data provenance. GitHub Actions runs these checks on pushes and pull requests.
+**30 automated tests** verify the published archive, bounded benchmark defaults, typed provider adapters, threshold boundaries, security gates, operational versus intent scoring, sequential costs/latency, error-cost sensitivity, infeasible constraints, Pareto dominance, calibration, CSV parsing, and data provenance. GitHub Actions runs these checks on pushes and pull requests.
 
 ## Stack and layout
 

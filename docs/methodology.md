@@ -1,5 +1,9 @@
 # Methodology
 
+## Published evidence
+
+The published artifact contains **1,270 measured cases covering 32 of 77 intents**. The run was stopped at the owner’s request. Cases follow the original intent-grouped test order; this is not a representative full-dataset benchmark. No further inference is needed to replay these results. The original simulated illustration remains available only as a fallback fixture.
+
 ## Task and data
 
 Zero-shot banking support classification on the official BANKING77 test split. No training examples are used. Primary scoring uses a published 12-family operational taxonomy; advanced scoring uses the original 77 labels. The benchmark does not execute banking actions or generate customer responses.

@@ -1212,6 +1212,7 @@ function App() {
       </div>
     );
   const isDemo = run.kind === "simulation",
+    isPartial = !isDemo && run.cases.length < 3080,
     savings = 1 - selected.totalCost / (baselines[1].totalCost || 1);
   return (
     <>
@@ -1349,11 +1350,17 @@ function App() {
           <div className={`run-notice ${isDemo ? "" : "measured"}`}>
             <div>
               <span className="status-dot" />
-              <strong>{isDemo ? "ILLUSTRATIVE MODE" : "MEASURED RUN"}</strong>
+              <strong>
+                {isDemo
+                  ? "ILLUSTRATIVE MODE"
+                  : isPartial
+                    ? "MEASURED SUBSET"
+                    : "MEASURED RUN"}
+              </strong>
               <span>
                 {isDemo
                   ? "Real BANKING77 messages. Simulated model outputs—not benchmark findings."
-                  : `${run.cases.length.toLocaleString()} recorded decisions · ${new Date(run.timestamp!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
+                  : `${run.cases.length.toLocaleString()}${isPartial ? " / 3,080" : ""} recorded decisions · ${new Set(run.cases.map((c) => c.truth)).size}/77 intents · ${new Date(run.timestamp!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`}
               </span>
             </div>
             <button
@@ -1850,7 +1857,9 @@ function App() {
                 <p>
                   {isDemo
                     ? "This site currently uses 154 real BANKING77 test queries with deterministic, simulated model predictions. Every displayed outcome is illustrative; no benchmark has been run or model-performance claim established."
-                    : "The interface is replaying a recorded benchmark run. Classification accuracy uses ground-truth labels; costs use the editable assumptions in the Scenario Lab."}
+                    : isPartial
+                      ? `This partial run contains ${run.cases.length.toLocaleString()} recorded cases covering ${new Set(run.cases.map((c) => c.truth)).size} of 77 intents, collected in the dataset’s original, intent-grouped order. It is not representative of full BANKING77 performance. Costs use the editable scenario assumptions.`
+                      : "The interface is replaying a recorded benchmark run. Classification accuracy uses ground-truth labels; costs use the editable assumptions in the Scenario Lab."}
                 </p>
                 <p>
                   The complete official test split contains 3,080 queries across

@@ -26,7 +26,7 @@ JEV_MODEL=jev-1.13.0
 LIVE_ACCESS_TOKEN=your_private_owner_access_token
 ```
 
-Never add a `VITE_` prefix to a secret. Redeploy after changes. No credential belongs in the Cloudflare Worker. Without credentials, the illustration works and live API requests remain disabled.
+Never add a `VITE_` prefix to a secret. Redeploy after changes. No credential belongs in the Cloudflare Worker. The deployed service has live Jev configured. Public exploration replays the saved 1,270-case measured subset without inference; the owner token is required for paid single-message evaluation. Without credentials on a fresh deployment, live API requests remain disabled.
 
 The reference key is only required by the offline benchmark runner, not by the public service. Run full benchmarks locally, review the results, and publish `public/benchmark.json` via Git.
 
@@ -54,4 +54,4 @@ curl -fsS https://escalation.ankitkapoor.me/api/health
 
 `{"ok":true,"liveEnabled":false}` is expected until both server-side live settings are entered. Check the homepage, illustration JSON, and asset responses at the final hostname after deployment.
 
-The illustration, chart, scenarios, imports/exports, and methodology work without credentials. API credentials and real provider outputs were not used during implementation verification.
+The saved benchmark, chart, scenarios, imports/exports, and methodology work without credentials. Live Jev was verified with one authenticated request; the published partial benchmark contains real outputs from both providers. No further model calls are required.

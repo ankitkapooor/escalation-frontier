@@ -92,9 +92,13 @@ async function main() {
   const header = rows.shift()!;
   const ti = header.indexOf("text"),
     li = header.indexOf("category");
-  const limit = Number(option("--limit", "3080"));
+  const limit = Number(option("--limit", "25"));
   if (!Number.isInteger(limit) || limit < 1 || limit > 3080)
     throw new Error("--limit must be between 1 and 3080.");
+  if (limit > 100 && !args.includes("--allow-large-run"))
+    throw new Error(
+      "Runs over 100 cases require explicit --allow-large-run. The portfolio default is 25 cases.",
+    );
   const entries = rows.slice(0, limit);
   const concurrency = Number(option("--concurrency", "4"));
   if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 16)
