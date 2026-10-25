@@ -1,0 +1,78 @@
+export type Prediction = {
+  label: string;
+  family?: string;
+  familyConfidence?: number;
+  confidence: number;
+  probabilities: Record<string, number>;
+  latencyMs: number;
+  model: string;
+  usage?: { input_tokens: number; output_tokens: number };
+  raw?: unknown;
+};
+export type Case = {
+  id: string;
+  text: string;
+  truth: string;
+  security: boolean;
+  securityProbability: number;
+  urgency?: number;
+  sufficiency?: number;
+  jev: Prediction;
+  llm: Prediction;
+};
+export type Run = {
+  schemaVersion: 1;
+  kind: "simulation" | "measured";
+  id: string;
+  timestamp: string | null;
+  dataset: string;
+  datasetRevision: string;
+  datasetSha256: string;
+  promptVersion: string;
+  models: { jev: string; llm: string };
+  cases: Case[];
+  notes: string[];
+};
+export type Assumptions = {
+  jevCost: number;
+  llmCost: number;
+  humanCost: number;
+  errorCost: number;
+  securityErrorCost: number;
+  escalationCost: number;
+  overhead: number;
+  humanLatencyMs: number;
+  humanGate: number;
+  accuracyFloor: number;
+  maxHumanRate: number;
+  latencySla: number;
+  automationFloor: number;
+};
+export type Architecture = "jev" | "llm" | "hybrid" | "human";
+export type Outcome = {
+  handler: "jev" | "llm" | "human";
+  prediction: string;
+  correct: boolean;
+  latencyMs: number;
+  inference: number;
+  review: number;
+  error: number;
+  escalation: number;
+};
+export type Metrics = {
+  threshold: number;
+  accuracy: number;
+  jevRate: number;
+  llmRate: number;
+  humanRate: number;
+  inferenceCost: number;
+  reviewCost: number;
+  errorCost: number;
+  escalationCost: number;
+  totalCost: number;
+  errors: number;
+  p50: number;
+  p95: number;
+  meanLatency: number;
+  count: number;
+};

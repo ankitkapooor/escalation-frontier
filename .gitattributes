@@ -1,0 +1,2 @@
+# Preserve the upstream dataset byte-for-byte, including CRLF line endings.
+data/banking77-test.csv -text whitespace=cr-at-eol
