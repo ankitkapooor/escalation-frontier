@@ -4,7 +4,7 @@
 
 An interactive portfolio experiment by [Ankit Kapoor](https://ankitkapoor.me). Explore how a confidence gate allocates banking support decisions between Jev, a reasoning model, and simulated human review.
 
-Designed for **escalation.ankitkapoor.me**. One Node service serves the React interface and the optional live Jev endpoint. No database, background worker, or paid API is needed to explore the illustration.
+Live at **[escalation.ankitkapoor.me](https://escalation.ankitkapoor.me)**. One Node service serves the React interface and the optional live Jev endpoint, with a tiny Cloudflare Worker forwarding the portfolio hostname over HTTPS. No database, background worker, or paid API is needed to explore the illustration.
 
 ## Run locally
 
@@ -103,6 +103,7 @@ Tests cover typed provider adapters, threshold boundaries, security gates, opera
 React + TypeScript + Vite, custom SVG charts, plain CSS, Node's built-in HTTP server. The runtime needs no external database or server package.
 
 ```
+cloudflare/    HTTPS proxy for the portfolio subdomain
 frontend/      research interface
 shared/        types, routing, economics, calibration, validation
 server/        static hosting and protected live endpoint

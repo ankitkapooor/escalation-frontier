@@ -6,6 +6,7 @@ dist/
 *.log
 .DS_Store
 .wrangler/
-.railway/
+.railway/*
+!.railway/railway.ts
 data/runs/
 !data/runs/.gitkeep

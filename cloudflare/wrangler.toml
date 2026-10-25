@@ -1,0 +1,13 @@
+name = "escalation-frontier-proxy"
+main = "worker.ts"
+compatibility_date = "2026-10-25"
+account_id = "2aa82d87fe21472b7c89953238f0cf6f"
+workers_dev = false
+preview_urls = false
+
+[[routes]]
+pattern = "escalation.ankitkapoor.me/*"
+zone_name = "ankitkapoor.me"
+
+[vars]
+ORIGIN = "https://escalation-frontier-production.up.railway.app"
